@@ -31,16 +31,38 @@ class Enemy(Actor):
         self.health = health
         self.damage = damage
         self.vulnerable = True
-        self.invTime = 2
+        self.invTime = 1.5
+        self.frameTimeCounter = 0
+        self.frameDuration = 10
+        self.frameIndex = 0
+        self.direction = -1
+        self.speed = 0
 
     def take_damage(self, amount):
         if self.vulnerable:
             self.health -= amount
             self.vulnerable = False
+            for i in range(1, 5):
+                clock.schedule(self.inv_anim, self.invTime / i)
             clock.schedule(self.invulnerability_end, self.invTime)
 
     def invulnerability_end(self):
         self.vulnerable = True
+
+    def inv_anim(self):
+        """
+        Override in children.
+        """
+        pass
+
+    def movement(self):
+        self.direction = 1 if self.speed < 0 else 0
+        self.x += self.speed
+
+    def terrain_collision_handler(self):
+        for ob in obstacle_blocks:
+            if self.colliderect(ob) or self.x > WIDTH or self.x < 0:
+                self.speed *= -1
 
     def destroy(self):
         enemies_list.remove(self)
@@ -49,21 +71,35 @@ class Enemy(Actor):
         if self.health == 0:
             self.destroy()
 
+        self.movement()
+        self.terrain_collision_handler()
+
 class Bee(Enemy):
         def __init__(self, position):
             self.health = 2
             self.damage = 1
-            super().__init__(bee_fly_frames[0], position, self.health, self.damage)
-
+            super().__init__(bee_fly_frames[0][0], position, self.health, self.damage)
+            self.speed = -1
 
         def take_damage(self, amount):
             self.image = bee_hurt_frame
-            clock.schedule(self.inv_anim, self.invTime/4)
-            clock.schedule(self.inv_anim, self.invTime/2)
             super().take_damage(amount)
 
         def inv_anim(self):
             self.image = bee_transparent_frame
+
+
+        def animation_handler(self):
+            self.frameTimeCounter += 1
+            if self.speed != 0:
+                if self.frameTimeCounter >= self.frameDuration:
+                    self.frameTimeCounter = 0
+                    self.frameIndex = (self.frameIndex + 1) % len(bee_fly_frames[self.direction])
+                    self.image = bee_fly_frames[self.direction][self.frameIndex]
+
+        def update_self(self):
+            super().update_self()
+            self.animation_handler()
 
 
 
