@@ -1,2 +1,2 @@
 # Slime-Platformer-Pgzero
-Simple platformer game with pygame zero for an entry test.
+Simple platformer game made with pygame zero for an entry test.
