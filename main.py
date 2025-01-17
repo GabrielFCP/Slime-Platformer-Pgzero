@@ -228,7 +228,6 @@ class Snail(Enemy):
         self.speed = -1
         clock.schedule(self.hide_in_shell, self.hide_cd)
 
-
     def movement(self):
         if self.can_move:
             super().movement()
@@ -265,7 +264,7 @@ class Snail(Enemy):
             self.update_hide_animation(forward=False)
 
     def update_walk_animation(self):
-        self.set_state("walking")  # Ensure state consistency
+        self.set_state("walking")
         self.frameIndex = (self.frameIndex + 1) % len(snail_walk_frames[self.direction])
         self.image = snail_walk_frames[self.direction][self.frameIndex]
 
@@ -552,6 +551,7 @@ def redraw():
         Decoration((random.randint(0, WIDTH), (HEIGHT - 96)))
     drawing_list = [decorations_list, enemies_list[current_level], obstacle_blocks[current_level], collectibles_list]
     decorations_list = []
+    collectibles_list = []
 
 redraw()
 
