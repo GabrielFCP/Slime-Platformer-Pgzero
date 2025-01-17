@@ -1,6 +1,6 @@
 import random
-from slime_sprite_list import *
-from bee_sprite_list import *
+from player_sprites import *
+from enemy_sprites import *
 from collectible_sprite_list import *
 from decoration_sprite_list import decoration_sprite_list
 from maps import floor_list
@@ -9,7 +9,7 @@ from maps import floor_list
 
 # GAME DATA --------------------------------------------------------------------------------------------------------
 WIDTH = 1000
-HEIGHT = 700
+HEIGHT = 688
 
 SKY_COLOR = (135, 206, 235)
 
@@ -20,20 +20,21 @@ TITLE = "Teste pygame"
 FPS = 60
 GRAVITY = 0.9
 TERMINAL_VELOCITY = 10
-
 current_level = 0
-obstacle_blocks = []
-enemies_list = []
+
+total_floors = len(floor_list)
+obstacle_blocks = {}
+enemies_list = {}
 collectibles_list = []
 decorations_list = []
-drawing_list = [decorations_list, enemies_list, obstacle_blocks, collectibles_list]
+
 
 last_known_position = (0, 0)
 # CLASS DEFINITIONS -------------------------------------------------------------------------------------------------------------------------------
 # COLLECTIBLES
 class Collectible(Actor):
     def __init__(self, image, position):
-        self.frameTimeCounter = 0
+        self.frame_timer = 0
         self.frameDuration = 10
         self.frameIndex = 0
         super().__init__(image, position)
@@ -58,10 +59,9 @@ class Heart(Collectible):
         super().interact()
 
     def animation(self):
-        self.frameTimeCounter += 1
-        if self.frameTimeCounter >= self.frameDuration:
-            self.frameTimeCounter = 0
-            print(self.frameIndex)
+        self.frame_timer += 1
+        if self.frame_timer >= self.frameDuration:
+            self.frame_timer = 0
             self.image = heart_collectible_frame[self.frameIndex]
             self.frameIndex = (self.frameIndex + 1) % len(heart_collectible_frame)
 
@@ -71,17 +71,20 @@ class Heart(Collectible):
 
 # PLATFORMS
 class Platform(Actor):
-    def __init__(self, image, position):
+    def __init__(self, image, position, floor):
+        self.floor = floor
         super().__init__(image, position)
-        obstacle_blocks.append(self)
+        if self.floor not in obstacle_blocks:
+            obstacle_blocks[self.floor] = []
+        obstacle_blocks[self.floor].append(self)
 
 class Grass(Platform):
-    def __init__(self, position):
-        super().__init__("grass_straight", position)
+    def __init__(self, position, floor):
+        super().__init__("grass_straight", position, floor)
 
 class Dirt(Platform):
-    def __init__(self, position):
-        super().__init__("grass_dirt_straight", position)
+    def __init__(self, position, floor):
+        super().__init__("grass_dirt_straight", position, floor)
 
 class Decoration(Actor):
     def __init__(self, position):
@@ -90,19 +93,24 @@ class Decoration(Actor):
 
 # ENTITIES
 class Enemy(Actor):
-    def __init__(self, image, position, health, damage):
-        enemies_list.append(self)
+    def __init__(self, image, position, floor, health, damage):
         self.health = health
         self.damage = damage
+        self.floor = floor
         self.vulnerable = True
         self.invTime = 1.5
-        self.frameTimeCounter = 0
+        self.frame_timer = 0
         self.frameDuration = 10
         self.frameIndex = 0
         self.direction = -1
         self.speed = 0
+        self.temp_speed = 0
         self.loot_chance = 50
+        self.time_counter = 0
         super().__init__(image, position)
+        if self.floor not in enemies_list:
+            enemies_list[self.floor] = []
+        enemies_list[self.floor].append(self)
 
 
     def take_damage(self, amount):
@@ -116,10 +124,13 @@ class Enemy(Actor):
     def invulnerability_end(self):
         self.vulnerable = True
 
-    def inv_anim(self):
+    def respawn():
         """
         Override in children.
         """
+        pass
+
+    def inv_anim(self):
         pass
 
     def movement(self):
@@ -127,12 +138,25 @@ class Enemy(Actor):
         self.x += self.speed
 
     def terrain_collision_handler(self):
-        for ob in obstacle_blocks:
-            if self.colliderect(ob) or self.x > WIDTH or self.x < 0:
-                self.speed *= -1
+        if self.right > WIDTH or self.left < 0:
+            self.temp_speed = self.speed
+            self.speed = 0
+            self.x -= 5
+        for ob in obstacle_blocks[self.floor]:
+            if self.colliderect(ob):
+                if self.speed > 0:
+                    self.temp_speed = self.speed
+                    self.speed = 0
+                    self.x -= 5
+                else:
+                    self.temp_speed = self.speed
+                    self.speed = 0
+                    self.x += 5
+        if self.speed == 0:
+            self.speed -= self.temp_speed
 
     def destroy(self):
-        enemies_list.remove(self)
+        enemies_list[current_level].remove(self)
         if random.randint(1, 100) <= self.loot_chance:
             Heart((self.x, self.y))
 
@@ -140,16 +164,15 @@ class Enemy(Actor):
     def update_self(self):
         if self.health <= 0:
             self.destroy()
-
         self.movement()
         self.terrain_collision_handler()
 
 class Bee(Enemy):
-    def __init__(self, position):
+    def __init__(self, position, floor):
         self.health = 2
         self.damage = 1
-        super().__init__(bee_fly_frames[0][0], position, self.health, self.damage)
-        self.speed = -1
+        super().__init__(bee_fly_frames[0][0], position, floor, self.health, self.damage)
+        self.speed = -2
 
     def take_damage(self, amount):
         self.image = bee_hurt_frame
@@ -159,10 +182,10 @@ class Bee(Enemy):
         self.image = bee_transparent_frame
 
     def animation_handler(self):
-        self.frameTimeCounter += 1
+        self.frame_timer += 1
         if self.speed != 0:
-            if self.frameTimeCounter >= self.frameDuration:
-                self.frameTimeCounter = 0
+            if self.frame_timer >= self.frameDuration:
+                self.frame_timer = 0
                 self.frameIndex = (self.frameIndex + 1) % len(bee_fly_frames[self.direction])
                 self.image = bee_fly_frames[self.direction][self.frameIndex]
 
@@ -170,6 +193,79 @@ class Bee(Enemy):
         self.animation_handler()
         super().update_self()
 
+class Snail(Enemy):
+    def __init__(self, position, floor):
+        self.health = 4
+        self.damage = 2
+        self.can_move = True
+        self.is_hiding = False
+        self.hide_cd = random.randint(3, 6)
+        self.shell_time = 6
+        super().__init__(snail_walk_frames[0][0], position, floor, self.health, self.damage)
+        self.speed = -1
+        clock.schedule(self.hide_in_shell, self.hide_cd)
+
+
+    def movement(self):
+        if self.can_move:
+            super().movement()
+
+    def hide_in_shell(self):
+        self.can_move = False
+        self.is_hiding = True
+        clock.schedule(self.out_of_shell, self.shell_time)
+        clock.schedule(self.out_of_shell, self.shell_time)
+        clock.schedule(self.hide_in_shell, self.hide_cd + self.shell_time)
+
+    def out_of_shell(self):
+        self.is_hiding = False
+        self.can_move = True
+
+    def take_damage(self, amount):
+        self.image = snail_hurt_frames[self.direction][0]
+        super().take_damage(amount)
+
+    def inv_anim(self):
+        self.image = snail_transparent_frame
+
+    def animation_handler(self):
+        self.frame_timer += 0.5
+        if self.frame_timer < self.frameDuration:
+            return
+        self.frame_timer = 0
+
+        if self.can_move:
+            self.update_walk_animation()
+        elif self.is_hiding:
+            self.update_hide_animation(forward=True)
+        else:
+            self.update_hide_animation(forward=False)
+
+    def update_walk_animation(self):
+        self.set_state("walking")  # Ensure state consistency
+        self.frameIndex = (self.frameIndex + 1) % len(snail_walk_frames[self.direction])
+        self.image = snail_walk_frames[self.direction][self.frameIndex]
+
+    def update_hide_animation(self, forward=True):
+        self.set_state("hiding" if forward else "unhiding")
+        if forward:
+            if self.frameIndex < len(snail_hide_frames[self.direction]) - 1:
+                self.frameIndex += 1
+            self.image = snail_hide_frames[self.direction][self.frameIndex]
+        else:
+            if self.frameIndex > 0:
+                self.frameIndex -= 1
+            self.image = snail_hide_frames[self.direction][self.frameIndex]
+
+    def set_state(self, new_state):
+        if getattr(self, "current_state", None) != new_state:
+            self.current_state = new_state
+            self.frameIndex = 0
+            self.frame_timer = 0
+
+    def update_self(self):
+        self.animation_handler()
+        super().update_self()
 
 class Player(Actor):
 
@@ -191,7 +287,7 @@ class Player(Actor):
         self.moveDirection = 0
         self.frameIndex = 0
         self.frameDuration = 10
-        self.frameTimeCounter = 0
+        self.frame_timer = 0
         self.isCollidingLeft = False
         self.isCollidingRight = False
         self.playerDamage = 1
@@ -199,6 +295,7 @@ class Player(Actor):
         self.isStunned = False
         self.health = self.MAX_HEALTH
         self.alive = True
+
 
     def move(self, vX, vY):
         self.x += vX
@@ -223,7 +320,8 @@ class Player(Actor):
         self.isCollidingRight = False
 
     def handleTerrainCollision(self):
-        for ob in obstacle_blocks:
+        global current_level
+        for ob in obstacle_blocks[current_level]:
             if self.colliderect(ob):
                 if self.vY > 0.01 and self.bottom > ob.top and self.top < ob.top:
                     self.vY = 0
@@ -245,7 +343,8 @@ class Player(Actor):
                         self.isCollidingLeft = True
 
     def handleEnemyCollision(self):
-        for en in enemies_list:
+        global current_level
+        for en in enemies_list[current_level]:
             if self.colliderect(en):
                 if self.vY > 0 and self.bottom > en.top and self.top < en.top:
                     if en.vulnerable:
@@ -255,22 +354,22 @@ class Player(Actor):
                         self.take_damage(en.damage)
                 elif self.vY < 0 and self.top < en.bottom and self.bottom > en.bottom:
                     self.stun_self(self.KNOCKBACK_TIME)
-                    self.vY *= -1
-                    self.top = en.bottom
+                    self.vY = 0
+                    #self.top = en.bottom
                     self.take_damage(en.damage)
 
                 if self.bottom <= en.bottom and self.top >= en.top:
                     if self.vX > 0 and self.right >= en.left:
-                        self.stun_self(self.KNOCKBACK_TIME)
+                        #self.stun_self(self.KNOCKBACK_TIME)
                         self.take_damage(en.damage)
-                        self.vX = -self.vX * self.JUMP_STRENGHT
-                        self.right = en.left
+                        #self.vX = -self.vX * self.JUMP_STRENGHT
+                        #self.right = en.left
                         self.isCollidingRight = True
                     elif self.vX < 0 and self.left <= en.right:
-                        self.stun_self(self.KNOCKBACK_TIME)
-                        self.vX = self.vX * self.JUMP_STRENGHT
+                        #self.stun_self(self.KNOCKBACK_TIME)
+                        #self.vX = self.vX * self.JUMP_STRENGHT
                         self.take_damage(en.damage)
-                        self.left = en.right
+                        #self.left = en.right
                         self.isCollidingLeft = True
 
     def collectible_collision(self):
@@ -316,9 +415,9 @@ class Player(Actor):
 
     def animation_handler(self):
         if self.isWalking and self.alive:
-            self.frameTimeCounter += 1
-            if self.frameTimeCounter >= self.frameDuration:
-                self.frameTimeCounter = 0
+            self.frame_timer += 1
+            if self.frame_timer >= self.frameDuration:
+                self.frame_timer = 0
                 self.frameIndex = (self.frameIndex + 1) % len(slimeWalkingFrames[self.moveDirection])
                 self.image = slimeWalkingFrames[self.moveDirection][self.frameIndex]
         elif not self.isWalking and self.alive:
@@ -327,21 +426,32 @@ class Player(Actor):
             self.death_animation()
 
     def idleAnimation(self):
-        self.frameTimeCounter += 0.5
-        if self.frameTimeCounter >= self.frameDuration:
-            self.frameTimeCounter = 0
+        self.frame_timer += 0.5
+        if self.frame_timer >= self.frameDuration:
+            self.frame_timer = 0
             self.frameIndex = (self.frameIndex + 1) % len(slimeIdleFrames[self.moveDirection])
             self.image = slimeIdleFrames[self.moveDirection][self.frameIndex]
 
     def death_animation(self):
         if self.frameIndex < len(slimeDeathFrames) - 1:
-            self.frameTimeCounter += 0.5
-            if self.frameTimeCounter >= self.frameDuration:
-                self.frameTimeCounter = 0
+            self.frame_timer += 0.5
+            if self.frame_timer >= self.frameDuration:
+                self.frame_timer = 0
                 self.frameIndex += 1
                 self.image = slimeDeathFrames[self.frameIndex]
         else:
             self.image = slimeDeathFrames[-1]
+
+    def change_floor(self):
+        global current_level
+        if self.x > WIDTH:
+            current_level +=1
+            self.x = 0
+            redraw()
+        elif self.x < 0 and current_level > 0:
+            current_level -=1
+            self.x = WIDTH
+            redraw()
 
     def updateSelf(self):
         if self.health <= 0:
@@ -354,11 +464,8 @@ class Player(Actor):
         self.handleTerrainCollision()
         self.handleEnemyCollision()
         self.collectible_collision()
+        self.change_floor()
 
-# INSTANTIATIONS ------------------------------------------------------------------------------------------------
-player = Player(slimeIdleFrames[0][0], (400, 400))
-bee = Bee((500, 580))
-heart = Heart((600, 580))
 # INPUT DEFINITIONS --------------------------------------------------------------------------------------------
 
 def on_key_down(key):
@@ -376,20 +483,43 @@ def handleInput(player):
             player.moveRight(player.PLAYER_SPEED)
 
 # MAP GENERATION -----------------------------------------------------------------------------------------------
-for floor in floor_list:
+block_size = 32
+for f, floor in enumerate(floor_list):
+    enemies_list[f] = []
+    obstacle_blocks[f] = []
     rows = floor.strip().split('\n')
-    for l, row in enumerate(rows):
+    for r, row in enumerate(rows):
         current_floor = row.split(',')
         for c, n in enumerate(current_floor):
             if n == "0":
-                Dirt((c * 32, l * 32))
+                Dirt((c * block_size, r * block_size), f)
             if n == "1":
-                Grass((c * 32, l * 32))
-    for dec in range(1, random.randint(0, 20), 1):
-            Decoration((random.randint(0, WIDTH), (HEIGHT - 64)))
+                Grass((c * block_size, r * block_size), f)
+            if n == "5":
+                Snail((c * block_size -32, HEIGHT - 81), f)
+            if n == "6":
+                Bee((c * block_size, r * block_size), f)
+            if n == "4":
+                #end
+                pass
 
 
+# INSTANTIATIONS ------------------------------------------------------------------------------------------------
+player = Player(slimeIdleFrames[0][0], (400, 400))
+bee = Bee((500, 580), 0)
+heart = Heart((600, 580))
 # UPDATE & DRAW -------------------------------------------------------------------------------------------------
+drawing_list = [decorations_list, enemies_list[current_level], obstacle_blocks[current_level], collectibles_list]
+def redraw():
+    global drawing_list
+    global decorations_list
+    for dec in range(1, random.randint(10, 20), 1):
+        Decoration((random.randint(0, WIDTH), (HEIGHT - 96)))
+    drawing_list = [decorations_list, enemies_list[current_level], obstacle_blocks[current_level], collectibles_list]
+    decorations_list = []
+
+redraw()
+
 def draw():
     screen.clear()
     screen.blit("background_distantlands", (0, 0))
@@ -410,7 +540,7 @@ def draw():
 def update():
     player.updateSelf()
     handleInput(player)
-    for en in enemies_list:
+    for en in enemies_list[current_level]:
         en.update_self()
 
     for co in collectibles_list:
