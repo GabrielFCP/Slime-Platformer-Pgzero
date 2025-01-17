@@ -1,46 +1,69 @@
 import random
-from player_sprites import *
+from player_extra import *
 from enemy_sprites import *
 from collectible_sprite_list import *
-from decoration_sprite_list import decoration_sprite_list
+from decoration_sprite_list import *
 from maps import floor_list
 
-
+#SOUNDS --------------------------------
+deal_damage = sounds.slime_deal_damage
+take_damage = sounds.slime_take_damage
+jump = sounds.slime_fall
+pick_up = sounds.slime_pick_up
 
 # GAME DATA --------------------------------------------------------------------------------------------------------
 WIDTH = 1000
 HEIGHT = 688
-
-SKY_COLOR = (135, 206, 235)
-
-#TILE_C = 32
-#TILE_R = 22
-
-TITLE = "Teste pygame"
+TITLE = "Slime King"
 FPS = 60
 GRAVITY = 0.9
 TERMINAL_VELOCITY = 10
 current_level = 0
+
+sound_enabled = True
+game_state = "paused"
 
 total_floors = len(floor_list)
 obstacle_blocks = {}
 enemies_list = {}
 collectibles_list = []
 decorations_list = []
-
+menu_elements = []
 
 last_known_position = (0, 0)
 # CLASS DEFINITIONS -------------------------------------------------------------------------------------------------------------------------------
-# COLLECTIBLES
-class Collectible(Actor):
+class Menu_btn(Actor):
     def __init__(self, image, position):
+        super().__init__(image, position)
+        menu_elements.append(self)
+
+class Animated_Object(Actor):
+    def __init__(self, image, position):
+        super().__init__(image, position)
         self.frame_timer = 0
         self.frameDuration = 10
         self.frameIndex = 0
+
+class Exit(Actor):
+    def __init__(self, image, position, floor):
+        self.floor = floor
+        super().__init__(image, position)
+        if self.floor not in obstacle_blocks:
+            obstacle_blocks[self.floor] = []
+        obstacle_blocks[self.floor].append(self)
+
+    def win():
+        game_state == "win"
+
+# COLLECTIBLES
+class Collectible(Animated_Object):
+    global sound_enabled
+    def __init__(self, image, position):
         super().__init__(image, position)
         collectibles_list.append(self)
-
     def interact(self):
+        if sound_enabled:
+            pick_up.play()
         self.destroy()
     def destroy(self):
         pass
@@ -92,16 +115,14 @@ class Decoration(Actor):
         decorations_list.append(self)
 
 # ENTITIES
-class Enemy(Actor):
+class Enemy(Animated_Object):
+    global sound_enabled
     def __init__(self, image, position, floor, health, damage):
         self.health = health
         self.damage = damage
         self.floor = floor
         self.vulnerable = True
         self.invTime = 1.5
-        self.frame_timer = 0
-        self.frameDuration = 10
-        self.frameIndex = 0
         self.direction = -1
         self.speed = 0
         self.temp_speed = 0
@@ -117,6 +138,8 @@ class Enemy(Actor):
         if self.vulnerable:
             self.health -= amount
             self.vulnerable = False
+            if sound_enabled:
+                deal_damage.play()
             for i in range(1, 4):
                 clock.schedule(self.inv_anim, self.invTime / i)
             clock.schedule(self.invulnerability_end, self.invTime)
@@ -267,36 +290,27 @@ class Snail(Enemy):
         self.animation_handler()
         super().update_self()
 
-class Player(Actor):
-
-    PLAYER_SPEED = 3
-    MAX_HEALTH = 5
-    JUMP_STRENGHT = 6
-    KNOCKBACK_TIME = 0.2
-    JUMP_CD = 0.2
-    INV_TIME = 1
-
-    jumpSounds = ["slime_jump1.mp3"]
+class Player(Animated_Object):
     def __init__(self, image, position):
+        self.PLAYER_SPEED = 3
+        self.MAX_HEALTH = 5
+        self.JUMP_CD = 1
+        self.INV_TIME = 1
         super().__init__(image, position)
+        self.JUMP_STRENGTH = 6
         self.vX = 0
         self.vY = 0
         self.jumpTimer = 0
         self.fallTimer = 0
         self.isWalking = False
         self.moveDirection = 0
-        self.frameIndex = 0
-        self.frameDuration = 10
-        self.frame_timer = 0
         self.isCollidingLeft = False
         self.isCollidingRight = False
         self.playerDamage = 1
         self.isVulnerable = True
-        self.isStunned = False
         self.health = self.MAX_HEALTH
         self.alive = True
-
-
+        self.sound_enabled = True
     def move(self, vX, vY):
         self.x += vX
         self.y += vY
@@ -346,31 +360,18 @@ class Player(Actor):
         global current_level
         for en in enemies_list[current_level]:
             if self.colliderect(en):
-                if self.vY > 0 and self.bottom > en.top and self.top < en.top:
+                if self.vY > 0 and self.bottom > en.top:
                     if en.vulnerable:
                         en.take_damage(self.playerDamage)
-                        self.vY = -self.JUMP_STRENGHT * 1.5
-                    else:
+                        self.vY = -self.JUMP_STRENGTH * 2
+                else:
+                    if self.bottom > en.top:
                         self.take_damage(en.damage)
-                elif self.vY < 0 and self.top < en.bottom and self.bottom > en.bottom:
-                    self.stun_self(self.KNOCKBACK_TIME)
-                    self.vY = 0
-                    #self.top = en.bottom
-                    self.take_damage(en.damage)
-
-                if self.bottom <= en.bottom and self.top >= en.top:
-                    if self.vX > 0 and self.right >= en.left:
-                        #self.stun_self(self.KNOCKBACK_TIME)
-                        self.take_damage(en.damage)
-                        #self.vX = -self.vX * self.JUMP_STRENGHT
-                        #self.right = en.left
-                        self.isCollidingRight = True
-                    elif self.vX < 0 and self.left <= en.right:
-                        #self.stun_self(self.KNOCKBACK_TIME)
-                        #self.vX = self.vX * self.JUMP_STRENGHT
-                        self.take_damage(en.damage)
-                        #self.left = en.right
-                        self.isCollidingLeft = True
+                    elif self.right > en.left and self.left < en.right:
+                        if self.vX > 0 and self.right >= en.left:
+                            self.take_damage(en.damage)
+                        elif self.vX < 0 and self.left <= en.right:
+                            self.take_damage(en.damage)
 
     def collectible_collision(self):
         for co in collectibles_list:
@@ -382,6 +383,8 @@ class Player(Actor):
             self.image = slimeHurtFrame
             self.health -= dmg
             self.isVulnerable = False
+            if self.sound_enabled:
+                take_damage.play()
             for i in range(1, 4):
                 clock.schedule(self.inv_anim, self.INV_TIME / i)
             clock.schedule(self.inv_end, self.INV_TIME)
@@ -397,21 +400,17 @@ class Player(Actor):
         self.isVulnerable = True
 
     def jump(self):
-        self.vY -= GRAVITY * self.JUMP_STRENGHT
+        global sound_enabled
+        if sound_enabled:
+            jump.play()
+        self.vY -= GRAVITY * self.JUMP_STRENGTH
         self.isCollidingRight = False
         self.isCollidingLeft = False
-        self.jumpTimer = 0
-        sounds.slime_jump1.play()
-
-    def stun_self(self, cd):
-        self.isStunned = True
-        clock.schedule(self.unstun_self, cd)
-
-    def unstun_self(self):
-        self.isStunned = False
+        self.jumpTimer = self.JUMP_CD
 
     def die(self):
         self.alive = False
+        self.isVulnerable = False
 
     def animation_handler(self):
         if self.isWalking and self.alive:
@@ -454,29 +453,56 @@ class Player(Actor):
             redraw()
 
     def updateSelf(self):
+        global sound_enabled
         if self.health <= 0:
             self.die()
-        self.vY = min(self.vY + GRAVITY * (self.fallTimer / FPS), TERMINAL_VELOCITY)
-        self.fallTimer += 1
-        self.jumpTimer += 1/60
+        self.vY = min(self.vY + GRAVITY * self.fallTimer, TERMINAL_VELOCITY)
+        self.fallTimer += 1 / FPS
+        self.jumpTimer -= 1 / FPS
+        if self.jumpTimer < 0:
+            self.jumpTimer = 0
         self.move(self.vX, self.vY)
         self.animation_handler()
         self.handleTerrainCollision()
         self.handleEnemyCollision()
         self.collectible_collision()
+        self.sound_enabled = sound_enabled
         self.change_floor()
 
 # INPUT DEFINITIONS --------------------------------------------------------------------------------------------
 
 def on_key_down(key):
+    global game_state
     if key == keys.SPACE and player.alive:
-        if player.vY < 1 and player.jumpTimer >= player.JUMP_CD:
+        if player.vY < 1 and player.jumpTimer <= 0:
             player.jump()
+
+    if key == keys.ESCAPE and not game_state == "win":
+        if game_state == "playing":
+            game_state = "paused"
+        else:
+            game_state = "playing"
+
+def on_mouse_down(pos):
+    global game_state
+    global sound_enabled
+    if menu_elements[2].collidepoint(pos):
+        game_state = "playing"
+    elif menu_elements[3].collidepoint(pos):
+        if sound_enabled:
+            sound_enabled = False
+            music.stop()
+        else:
+            sound_enabled = True
+            music.play("time_for_adventure")
+    elif menu_elements[4].collidepoint(pos):
+        pgzrun.stop()
+
 
 def handleInput(player):
     player.vX = 0
     player.isWalking = False
-    if not player.isStunned and player.alive:
+    if player.alive:
         if keyboard.left:
             player.moveLeft(player.PLAYER_SPEED)
         if keyboard.right:
@@ -500,14 +526,23 @@ for f, floor in enumerate(floor_list):
             if n == "6":
                 Bee((c * block_size, r * block_size), f)
             if n == "4":
-                #end
+                #Exit((c * block_size, r * block_size), f)
                 pass
 
 
 # INSTANTIATIONS ------------------------------------------------------------------------------------------------
 player = Player(slimeIdleFrames[0][0], (400, 400))
-bee = Bee((500, 580), 0)
-heart = Heart((600, 580))
+# UI
+menu_elements.append(Actor("main_menu_bg"))
+menu_elements.append(Actor("title", (500, 140)))
+sound_ui_display = Actor("ui_sound", (500, 500))
+print(sound_ui_display.pos)
+y_position = 320
+for btn_image in main_menu_btns:
+    button = Menu_btn(btn_image, (500, y_position))
+    y_position += 120
+
+
 # UPDATE & DRAW -------------------------------------------------------------------------------------------------
 drawing_list = [decorations_list, enemies_list[current_level], obstacle_blocks[current_level], collectibles_list]
 def redraw():
@@ -524,24 +559,43 @@ def draw():
     screen.clear()
     screen.blit("background_distantlands", (0, 0))
 
-    for c_list in drawing_list:
-        for obj in c_list:
-            obj.draw()
+    if game_state == "playing":
+        for c_list in drawing_list:
+            for obj in c_list:
+                obj.draw()
+        player.draw()
+        screen.draw.text(
+        f'Life: {player.health}/{player.MAX_HEALTH}',
+        (32, 32),
+        color="white",
+        fontsize=60,
+        owidth=0.5,
+        ocolor="black")
 
-    player.draw()
-    screen.draw.text(
-    f'Life: {player.health}/{player.MAX_HEALTH}',
-    (32, 32),
-    color="white",
-    fontsize=60,
-    owidth=0.5,
-    ocolor="black")
+    if game_state == "paused":
+        for el in menu_elements:
+            el.draw()
+
+    if game_state == "win":
+                screen.draw.text(
+        "WIN!",
+        (250, 250),
+        color="YELLOW",
+        fontsize=300,
+        owidth=0.5,
+        ocolor="black")
+
+    if sound_enabled:
+        sound_ui_display.image = ("ui_sound")
+    else:
+        sound_ui_display.image = ("ui_sound_off")
 
 def update():
-    player.updateSelf()
-    handleInput(player)
-    for en in enemies_list[current_level]:
-        en.update_self()
+    if game_state == "playing":
+        player.updateSelf()
+        handleInput(player)
+        for en in enemies_list[current_level]:
+            en.update_self()
 
-    for co in collectibles_list:
-        co.update_self()
+        for co in collectibles_list:
+            co.update_self()

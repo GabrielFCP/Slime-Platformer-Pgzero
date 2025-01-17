@@ -14,3 +14,4 @@ slimeIdleFrames = [
 slimeDeathFrames = ["slime/slime_dead1_r", "slime/slime_dead2_r", "slime/slime_dead3_r"]
 slimeHurtFrame = "slime/slime_hurt"
 slimeTransparentFrame = "slime/slime_transparent"
+
