@@ -1,6 +1,8 @@
 import random
 from slime_sprite_list import *
 from bee_sprite_list import *
+from collectible_sprite_list import *
+from decoration_sprite_list import decoration_sprite_list
 from maps import floor_list
 
 
@@ -19,14 +21,76 @@ FPS = 60
 GRAVITY = 0.9
 TERMINAL_VELOCITY = 10
 
+current_level = 0
 obstacle_blocks = []
 enemies_list = []
 collectibles_list = []
+decorations_list = []
+drawing_list = [decorations_list, enemies_list, obstacle_blocks, collectibles_list]
 
+last_known_position = (0, 0)
 # CLASS DEFINITIONS -------------------------------------------------------------------------------------------------------------------------------
+# COLLECTIBLES
+class Collectible(Actor):
+    def __init__(self, image, position):
+        self.frameTimeCounter = 0
+        self.frameDuration = 10
+        self.frameIndex = 0
+        super().__init__(image, position)
+        collectibles_list.append(self)
+
+    def interact(self):
+        self.destroy()
+    def destroy(self):
+        pass
+        collectibles_list.remove(self)
+
+    def update_self(self):
+        pass
+
+class Heart(Collectible):
+    def __init__(self, position):
+        self.heal_amount = 1
+        super().__init__(heart_collectible_frame[0], position)
+
+    def interact(self):
+        player.heal(self.heal_amount)
+        super().interact()
+
+    def animation(self):
+        self.frameTimeCounter += 1
+        if self.frameTimeCounter >= self.frameDuration:
+            self.frameTimeCounter = 0
+            print(self.frameIndex)
+            self.image = heart_collectible_frame[self.frameIndex]
+            self.frameIndex = (self.frameIndex + 1) % len(heart_collectible_frame)
+
+    def update_self(self):
+        self.animation()
+        super().update_self()
+
+# PLATFORMS
+class Platform(Actor):
+    def __init__(self, image, position):
+        super().__init__(image, position)
+        obstacle_blocks.append(self)
+
+class Grass(Platform):
+    def __init__(self, position):
+        super().__init__("grass_straight", position)
+
+class Dirt(Platform):
+    def __init__(self, position):
+        super().__init__("grass_dirt_straight", position)
+
+class Decoration(Actor):
+    def __init__(self, position):
+        super().__init__(decoration_sprite_list[random.randrange(0, len(decoration_sprite_list))], position)
+        decorations_list.append(self)
+
+# ENTITIES
 class Enemy(Actor):
     def __init__(self, image, position, health, damage):
-        super().__init__(image, position)
         enemies_list.append(self)
         self.health = health
         self.damage = damage
@@ -37,12 +101,15 @@ class Enemy(Actor):
         self.frameIndex = 0
         self.direction = -1
         self.speed = 0
+        self.loot_chance = 50
+        super().__init__(image, position)
+
 
     def take_damage(self, amount):
         if self.vulnerable:
             self.health -= amount
             self.vulnerable = False
-            for i in range(1, 5):
+            for i in range(1, 4):
                 clock.schedule(self.inv_anim, self.invTime / i)
             clock.schedule(self.invulnerability_end, self.invTime)
 
@@ -66,60 +133,43 @@ class Enemy(Actor):
 
     def destroy(self):
         enemies_list.remove(self)
+        if random.randint(1, 100) <= self.loot_chance:
+            Heart((self.x, self.y))
+
 
     def update_self(self):
-        if self.health == 0:
+        if self.health <= 0:
             self.destroy()
 
         self.movement()
         self.terrain_collision_handler()
 
 class Bee(Enemy):
-        def __init__(self, position):
-            self.health = 2
-            self.damage = 1
-            super().__init__(bee_fly_frames[0][0], position, self.health, self.damage)
-            self.speed = -1
-
-        def take_damage(self, amount):
-            self.image = bee_hurt_frame
-            super().take_damage(amount)
-
-        def inv_anim(self):
-            self.image = bee_transparent_frame
-
-
-        def animation_handler(self):
-            self.frameTimeCounter += 1
-            if self.speed != 0:
-                if self.frameTimeCounter >= self.frameDuration:
-                    self.frameTimeCounter = 0
-                    self.frameIndex = (self.frameIndex + 1) % len(bee_fly_frames[self.direction])
-                    self.image = bee_fly_frames[self.direction][self.frameIndex]
-
-        def update_self(self):
-            super().update_self()
-            self.animation_handler()
-
-
-
-class Platform(Actor):
-    def __init__(self, image, position):
-        super().__init__(image, position)
-        obstacle_blocks.append(self)
-
-class Grass(Platform):
     def __init__(self, position):
-        super().__init__("grass_straight", position)
+        self.health = 2
+        self.damage = 1
+        super().__init__(bee_fly_frames[0][0], position, self.health, self.damage)
+        self.speed = -1
 
+    def take_damage(self, amount):
+        self.image = bee_hurt_frame
+        super().take_damage(amount)
 
-class Dirt(Platform):
-    def __init__(self, position):
-        super().__init__("grass_dirt_straight", position)
+    def inv_anim(self):
+        self.image = bee_transparent_frame
 
-class Collectible(Actor):
-    def __init__(self, image, position):
-        super().__init__(image, position)
+    def animation_handler(self):
+        self.frameTimeCounter += 1
+        if self.speed != 0:
+            if self.frameTimeCounter >= self.frameDuration:
+                self.frameTimeCounter = 0
+                self.frameIndex = (self.frameIndex + 1) % len(bee_fly_frames[self.direction])
+                self.image = bee_fly_frames[self.direction][self.frameIndex]
+
+    def update_self(self):
+        self.animation_handler()
+        super().update_self()
+
 
 class Player(Actor):
 
@@ -209,8 +259,6 @@ class Player(Actor):
                     self.top = en.bottom
                     self.take_damage(en.damage)
 
-
-                # Horizontal Collision
                 if self.bottom <= en.bottom and self.top >= en.top:
                     if self.vX > 0 and self.right >= en.left:
                         self.stun_self(self.KNOCKBACK_TIME)
@@ -225,17 +273,23 @@ class Player(Actor):
                         self.left = en.right
                         self.isCollidingLeft = True
 
+    def collectible_collision(self):
+        for co in collectibles_list:
+            if self.colliderect(co):
+                co.interact()
+
     def take_damage(self, dmg):
         if self.isVulnerable:
             self.image = slimeHurtFrame
             self.health -= dmg
             self.isVulnerable = False
-            clock.schedule(self.inv_anim, self.INV_TIME/4)
-            clock.schedule(self.inv_anim, self.INV_TIME/2)
+            for i in range(1, 4):
+                clock.schedule(self.inv_anim, self.INV_TIME / i)
             clock.schedule(self.inv_end, self.INV_TIME)
 
     def heal(self, amount):
-        self.health += amount
+        if self.health < self.MAX_HEALTH:
+            self.health += amount
 
     def inv_anim(self):
         self.image = slimeTransparentFrame
@@ -250,7 +304,6 @@ class Player(Actor):
         self.jumpTimer = 0
         sounds.slime_jump1.play()
 
-
     def stun_self(self, cd):
         self.isStunned = True
         clock.schedule(self.unstun_self, cd)
@@ -260,7 +313,6 @@ class Player(Actor):
 
     def die(self):
         self.alive = False
-
 
     def animation_handler(self):
         if self.isWalking and self.alive:
@@ -292,22 +344,21 @@ class Player(Actor):
             self.image = slimeDeathFrames[-1]
 
     def updateSelf(self):
-
         if self.health <= 0:
             self.die()
         self.vY = min(self.vY + GRAVITY * (self.fallTimer / FPS), TERMINAL_VELOCITY)
         self.fallTimer += 1
         self.jumpTimer += 1/60
-
-        #print(self.vX)
         self.move(self.vX, self.vY)
         self.animation_handler()
         self.handleTerrainCollision()
         self.handleEnemyCollision()
+        self.collectible_collision()
 
 # INSTANTIATIONS ------------------------------------------------------------------------------------------------
 player = Player(slimeIdleFrames[0][0], (400, 400))
 bee = Bee((500, 580))
+heart = Heart((600, 580))
 # INPUT DEFINITIONS --------------------------------------------------------------------------------------------
 
 def on_key_down(key):
@@ -324,9 +375,7 @@ def handleInput(player):
         if keyboard.right:
             player.moveRight(player.PLAYER_SPEED)
 
-
-
-# MAP GENERATION
+# MAP GENERATION -----------------------------------------------------------------------------------------------
 for floor in floor_list:
     rows = floor.strip().split('\n')
     for l, row in enumerate(rows):
@@ -336,33 +385,33 @@ for floor in floor_list:
                 Dirt((c * 32, l * 32))
             if n == "1":
                 Grass((c * 32, l * 32))
-
-
-
-
-
+    for dec in range(1, random.randint(0, 20), 1):
+            Decoration((random.randint(0, WIDTH), (HEIGHT - 64)))
 
 
 # UPDATE & DRAW -------------------------------------------------------------------------------------------------
 def draw():
     screen.clear()
-    screen.fill(SKY_COLOR)
+    screen.blit("background_distantlands", (0, 0))
+
+    for c_list in drawing_list:
+        for obj in c_list:
+            obj.draw()
+
     player.draw()
-    screen.draw.text(str(player.health) + '/' + str(player.MAX_HEALTH), (32, 32), color="white", fontsize=60)
-
-
-    #boxy = Rect((player.x - 20, player.y - 12), (40, 24))
-    #screen.draw.rect(boxy, (0, 255, 0))
-    for en in enemies_list:
-        en.draw()
-
-    for ob in obstacle_blocks:
-        ob.draw()
-        #boxes = Rect((ob.x - 16, ob.y - 16), (32, 32))
-        #screen.draw.rect(boxes, (255, 0, 0))
+    screen.draw.text(
+    f'Life: {player.health}/{player.MAX_HEALTH}',
+    (32, 32),
+    color="white",
+    fontsize=60,
+    owidth=0.5,
+    ocolor="black")
 
 def update():
     player.updateSelf()
     handleInput(player)
     for en in enemies_list:
         en.update_self()
+
+    for co in collectibles_list:
+        co.update_self()
