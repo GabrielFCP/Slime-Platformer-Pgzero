@@ -547,6 +547,7 @@ drawing_list = [decorations_list, enemies_list[current_level], obstacle_blocks[c
 def redraw():
     global drawing_list
     global decorations_list
+    global collectibles_list
     for dec in range(1, random.randint(10, 20), 1):
         Decoration((random.randint(0, WIDTH), (HEIGHT - 96)))
     drawing_list = [decorations_list, enemies_list[current_level], obstacle_blocks[current_level], collectibles_list]
