@@ -23,14 +23,12 @@ current_floor = 0
 sound_enabled = False
 game_state = "paused"
 
-total_floors = len(floor_list)
 obstacle_blocks = {}
 enemies_list = {}
 collectibles_list = []
 decorations_list = []
 menu_elements = []
 
-last_known_position = (0, 0)
 # CLASS DEFINITIONS -------------------------------------------------------------------------------------------------------------------------------
 class Menu_btn(Actor):
     def __init__(self, image, position):
@@ -43,17 +41,6 @@ class Animated_Object(Actor):
         self.frame_timer = 0
         self.frameDuration = 10
         self.frameIndex = 0
-
-class Exit(Actor):
-    def __init__(self, image, position, floor):
-        self.floor = floor
-        super().__init__(image, position)
-        if self.floor not in obstacle_blocks:
-            obstacle_blocks[self.floor] = []
-        obstacle_blocks[self.floor].append(self)
-
-    def win():
-        game_state == "win"
 
 # COLLECTIBLES
 class Collectible(Animated_Object):
@@ -98,6 +85,7 @@ class Heart(Collectible):
 class Platform(Actor):
     def __init__(self, image, position, floor):
         self.floor = floor
+        self.type = "No type"
         super().__init__(image, position)
         if self.floor not in obstacle_blocks:
             obstacle_blocks[self.floor] = []
@@ -105,16 +93,29 @@ class Platform(Actor):
 
 class Grass(Platform):
     def __init__(self, position, floor):
-        super().__init__("grass_straight", position, floor)
+        super().__init__(grass_block, position, floor)
+        self.type = "Grass"
 
 class Dirt(Platform):
     def __init__(self, position, floor):
         super().__init__("grass_dirt_straight", position, floor)
+        self.type = "Dirt"
 
 class Decoration(Actor):
     def __init__(self, position):
         super().__init__(decoration_sprite_list[random.randrange(0, len(decoration_sprite_list))], position)
         decorations_list.append(self)
+        self.type = "Decoration"
+
+class Exit(Platform):
+    def __init__(self, position, floor):
+        super().__init__(exit_passage, position, floor)
+        self.type = "Exit"
+
+    def win(self):
+        global game_state
+        game_state = "win"
+        clock.schedule(quit, 3)
 
 # ENTITIES
 class Enemy(Animated_Object):
@@ -342,24 +343,27 @@ class Player(Animated_Object):
         global current_floor
         for ob in obstacle_blocks[current_floor]:
             if self.colliderect(ob):
-                if self.vY > 0.01 and self.bottom > ob.top and self.top < ob.top:
-                    self.vY = 0
-                    self.bottom = ob.top
-                    self.fallTimer = 0
-                    if self.vX == 0:
-                        self.fallLanding()
-                elif self.vY < 0 and self.top < ob.bottom and self.bottom > ob.bottom:
-                    self.vY *= -1
-                    self.top = ob.bottom
-                elif self.bottom <= ob.bottom and self.top >= ob.top:
-                    if self.vX > 0 and self.right >= ob.left:
-                        self.vX = 0
-                        self.right = ob.left
-                        self.isCollidingRight = True
-                    elif self.vX < 0 and self.left <= ob.right:
-                        self.vX = 0
-                        self.left = ob.right
-                        self.isCollidingLeft = True
+                if ob.type == "Exit":
+                    ob.win()
+                else:
+                    if self.vY > 0.01 and self.bottom > ob.top and self.top < ob.top:
+                        self.vY = 0
+                        self.bottom = ob.top
+                        self.fallTimer = 0
+                        if self.vX == 0:
+                            self.fallLanding()
+                    elif self.vY < 0 and self.top < ob.bottom and self.bottom > ob.bottom:
+                        self.vY *= -1
+                        self.top = ob.bottom
+                    elif self.bottom <= ob.bottom and self.top >= ob.top:
+                        if self.vX > 0 and self.right >= ob.left:
+                            self.vX = 0
+                            self.right = ob.left
+                            self.isCollidingRight = True
+                        elif self.vX < 0 and self.left <= ob.right:
+                            self.vX = 0
+                            self.left = ob.right
+                            self.isCollidingLeft = True
 
     def handleEnemyCollision(self):
         global current_floor
@@ -532,12 +536,17 @@ for f, floor in enumerate(floor_list):
             if n == "6":
                 Bee((c * block_size, r * block_size), f)
             if n == "4":
-                #Exit((c * block_size, r * block_size), f)
-                pass
+                Exit((c * block_size, r * block_size), f)
+                print((c * block_size, r * block_size))
+
+
 
 
 # INSTANTIATIONS ------------------------------------------------------------------------------------------------
-player = Player(slimeIdleFrames[0][0], (400, 100))
+player = Player(slimeIdleFrames[0][0], (400, HEIGHT - 100))
+collumn1 = Actor(exit_collumn, (426, 496))
+collumn2 = Actor(exit_collumn, (504, 496))
+
 # UI
 menu_elements.append(Actor("main_menu_bg"))
 menu_elements.append(Actor("title", (WIDTH / 2, 140)))
@@ -569,6 +578,9 @@ def draw():
             for obj in c_list:
                 obj.draw()
 
+        if current_floor == 3:
+            collumn1.draw()
+            collumn2.draw()
         player.draw()
         screen.draw.text(
         f'Life: {player.health}/{player.MAX_HEALTH}',
