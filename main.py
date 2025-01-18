@@ -163,10 +163,14 @@ class Enemy(Animated_Object):
         self.x += self.speed
 
     def terrain_collision_handler(self):
-        if self.right > WIDTH or self.left < 0:
+        if self.right > WIDTH:
             self.temp_speed = self.speed
             self.speed = 0
             self.x -= 5
+        if self.left < 0:
+            self.temp_speed = self.speed
+            self.speed = 0
+            self.x += 5
         for ob in obstacle_blocks[self.floor]:
             if self.colliderect(ob):
                 if self.speed > 0:
