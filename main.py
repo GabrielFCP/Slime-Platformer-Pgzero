@@ -21,7 +21,6 @@ TERMINAL_VELOCITY = 10
 current_floor = 0
 sound_enabled = False
 game_state = "paused"
-
 obstacle_blocks = {}
 enemies_list = {}
 collectibles_list = []
@@ -181,7 +180,6 @@ class Enemy(Animated_Object):
         enemies_list[current_floor].remove(self)
         if random.randint(1, 100) <= self.loot_chance:
             Heart((self.x, self.y),self.floor)
-
 
     def update_self(self):
         if self.health <= 0:
@@ -412,6 +410,7 @@ class Player(Animated_Object):
     def die(self):
         self.alive = False
         self.isVulnerable = False
+        clock.schedule(quit, 4)
 
     def animation_handler(self):
         if self.isWalking and self.alive:
