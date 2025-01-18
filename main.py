@@ -20,7 +20,7 @@ GRAVITY = 0.9
 TERMINAL_VELOCITY = 10
 current_level = 0
 
-sound_enabled = True
+sound_enabled = False
 game_state = "paused"
 
 total_floors = len(floor_list)
@@ -66,7 +66,6 @@ class Collectible(Animated_Object):
             pick_up.play()
         self.destroy()
     def destroy(self):
-        pass
         collectibles_list.remove(self)
 
     def update_self(self):
@@ -530,17 +529,16 @@ for f, floor in enumerate(floor_list):
 
 
 # INSTANTIATIONS ------------------------------------------------------------------------------------------------
-player = Player(slimeIdleFrames[0][0], (400, 400))
+player = Player(slimeIdleFrames[0][0], (400, 100))
 # UI
 menu_elements.append(Actor("main_menu_bg"))
-menu_elements.append(Actor("title", (500, 140)))
-sound_ui_display = Actor("ui_sound", (500, 500))
+menu_elements.append(Actor("title", (WIDTH / 2, 140)))
+sound_ui_display = Actor("ui_sound", (WIDTH - 62, 62))
 print(sound_ui_display.pos)
 y_position = 320
 for btn_image in main_menu_btns:
     button = Menu_btn(btn_image, (500, y_position))
     y_position += 120
-
 
 # UPDATE & DRAW -------------------------------------------------------------------------------------------------
 drawing_list = [decorations_list, enemies_list[current_level], obstacle_blocks[current_level], collectibles_list]
@@ -564,6 +562,7 @@ def draw():
         for c_list in drawing_list:
             for obj in c_list:
                 obj.draw()
+
         player.draw()
         screen.draw.text(
         f'Life: {player.health}/{player.MAX_HEALTH}',
@@ -578,7 +577,7 @@ def draw():
             el.draw()
 
     if game_state == "win":
-                screen.draw.text(
+        screen.draw.text(
         "WIN!",
         (250, 250),
         color="YELLOW",
@@ -586,10 +585,7 @@ def draw():
         owidth=0.5,
         ocolor="black")
 
-    if sound_enabled:
-        sound_ui_display.image = ("ui_sound")
-    else:
-        sound_ui_display.image = ("ui_sound_off")
+    sound_ui_display.draw()
 
 def update():
     if game_state == "playing":
@@ -600,3 +596,8 @@ def update():
 
         for co in collectibles_list:
             co.update_self()
+
+    if sound_enabled:
+        sound_ui_display.image = ("ui_sound")
+    else:
+        sound_ui_display.image = ("ui_sound_off")
