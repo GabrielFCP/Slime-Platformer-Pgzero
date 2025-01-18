@@ -19,7 +19,6 @@ FPS = 60
 GRAVITY = 0.9
 TERMINAL_VELOCITY = 10
 current_floor = 0
-
 sound_enabled = False
 game_state = "paused"
 
@@ -136,7 +135,6 @@ class Enemy(Animated_Object):
             enemies_list[self.floor] = []
         enemies_list[self.floor].append(self)
 
-
     def take_damage(self, amount):
         if self.vulnerable:
             self.health -= amount
@@ -149,12 +147,6 @@ class Enemy(Animated_Object):
 
     def invulnerability_end(self):
         self.vulnerable = True
-
-    def respawn():
-        """
-        Override in children.
-        """
-        pass
 
     def inv_anim(self):
         pass
@@ -508,7 +500,6 @@ def on_mouse_down(pos):
         elif menu_elements[4].collidepoint(pos):
             quit()
 
-
 def handleInput(player):
     player.vX = 0
     player.isWalking = False
@@ -537,10 +528,6 @@ for f, floor in enumerate(floor_list):
                 Bee((c * block_size, r * block_size), f)
             if n == "4":
                 Exit((c * block_size, r * block_size), f)
-                print((c * block_size, r * block_size))
-
-
-
 
 # INSTANTIATIONS ------------------------------------------------------------------------------------------------
 player = Player(slimeIdleFrames[0][0], (400, HEIGHT - 100))
