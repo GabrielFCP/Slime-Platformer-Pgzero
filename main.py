@@ -100,10 +100,29 @@ class Dirt(Platform):
         self.type = "Dirt"
 
 class Decoration(Actor):
-    def __init__(self, position):
-        super().__init__(decoration_sprite_list[random.randrange(0, len(decoration_sprite_list))], position)
-        decorations_list.append(self)
+    def __init__(self, image, position):
         self.type = "Decoration"
+        super().__init__(image, position)
+        decorations_list.append(self)
+
+class Foliage(Decoration):
+    def __init__(self, position):
+        image = foliage_sprite_list[random.randint(0, len(foliage_sprite_list) - 1)]
+        super().__init__(image, position)
+        self.type = "Foliage"
+
+class Cloud(Decoration):
+    def __init__(self, position):
+        image = cloud_sprite_list[random.randint(0, len(cloud_sprite_list) - 1)]
+        super().__init__(image, position)
+        self.type = "Cloud"
+        self.speed = random.uniform(0.01, 0.3)
+
+    def update_self(self):
+        self.x += self.speed
+        if self.x > WIDTH + 60:
+            self.x = -100
+            self.y = random.randint(70, 600)
 
 class Exit(Platform):
     def __init__(self, position, floor):
@@ -443,13 +462,16 @@ class Player(Animated_Object):
 
     def change_floor(self):
         global current_floor
+        global decorations_list
         if self.x > WIDTH:
             current_floor +=1
             self.x = 0
+            decorations_list = []
             redraw()
         elif self.x < 0 and current_floor > 0:
             current_floor -=1
             self.x = WIDTH
+            decorations_list = []
             redraw()
 
     def updateSelf(self):
@@ -549,9 +571,10 @@ def redraw():
     global decorations_list
     global collectibles_list
     for dec in range(1, random.randint(10, 20), 1):
-        Decoration((random.randint(0, WIDTH), (HEIGHT - 96)))
+        Foliage((random.randint(0, WIDTH), (HEIGHT - 96)))
+        Cloud(((random.randint(0, WIDTH), random.randint(70, HEIGHT / 2))))
     drawing_list = [decorations_list, enemies_list[current_floor], obstacle_blocks[current_floor], collectibles_list]
-    decorations_list = []
+
 
 redraw()
 
@@ -600,6 +623,10 @@ def update():
 
         for co in collectibles_list:
             co.update_self()
+
+        for deco in decorations_list:
+            if deco.type == "Cloud":
+                deco.update_self()
 
     if sound_enabled:
         sound_ui_display.image = ("ui_sound")
