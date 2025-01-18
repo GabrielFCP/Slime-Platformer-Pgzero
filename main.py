@@ -18,7 +18,7 @@ TITLE = "Slime King"
 FPS = 60
 GRAVITY = 0.9
 TERMINAL_VELOCITY = 10
-current_level = 0
+current_floor = 0
 
 sound_enabled = False
 game_state = "paused"
@@ -58,7 +58,8 @@ class Exit(Actor):
 # COLLECTIBLES
 class Collectible(Animated_Object):
     global sound_enabled
-    def __init__(self, image, position):
+    def __init__(self, image, position, floor):
+        self.floor = floor
         super().__init__(image, position)
         collectibles_list.append(self)
     def interact(self):
@@ -69,12 +70,14 @@ class Collectible(Animated_Object):
         collectibles_list.remove(self)
 
     def update_self(self):
-        pass
+        global current_floor
+        if self.floor != current_floor:
+            self.destroy()
 
 class Heart(Collectible):
-    def __init__(self, position):
+    def __init__(self, position, floor):
         self.heal_amount = 1
-        super().__init__(heart_collectible_frame[0], position)
+        super().__init__(heart_collectible_frame[0], position, floor)
 
     def interact(self):
         player.heal(self.heal_amount)
@@ -125,7 +128,7 @@ class Enemy(Animated_Object):
         self.direction = -1
         self.speed = 0
         self.temp_speed = 0
-        self.loot_chance = 50
+        self.loot_chance = 100
         self.time_counter = 0
         super().__init__(image, position)
         if self.floor not in enemies_list:
@@ -178,9 +181,9 @@ class Enemy(Animated_Object):
             self.speed -= self.temp_speed
 
     def destroy(self):
-        enemies_list[current_level].remove(self)
+        enemies_list[current_floor].remove(self)
         if random.randint(1, 100) <= self.loot_chance:
-            Heart((self.x, self.y))
+            Heart((self.x, self.y),self.floor)
 
 
     def update_self(self):
@@ -332,8 +335,8 @@ class Player(Animated_Object):
         self.isCollidingRight = False
 
     def handleTerrainCollision(self):
-        global current_level
-        for ob in obstacle_blocks[current_level]:
+        global current_floor
+        for ob in obstacle_blocks[current_floor]:
             if self.colliderect(ob):
                 if self.vY > 0.01 and self.bottom > ob.top and self.top < ob.top:
                     self.vY = 0
@@ -355,8 +358,8 @@ class Player(Animated_Object):
                         self.isCollidingLeft = True
 
     def handleEnemyCollision(self):
-        global current_level
-        for en in enemies_list[current_level]:
+        global current_floor
+        for en in enemies_list[current_floor]:
             if self.colliderect(en):
                 if self.vY > 0 and self.bottom > en.top:
                     if en.vulnerable:
@@ -440,13 +443,13 @@ class Player(Animated_Object):
             self.image = slimeDeathFrames[-1]
 
     def change_floor(self):
-        global current_level
+        global current_floor
         if self.x > WIDTH:
-            current_level +=1
+            current_floor +=1
             self.x = 0
             redraw()
-        elif self.x < 0 and current_level > 0:
-            current_level -=1
+        elif self.x < 0 and current_floor > 0:
+            current_floor -=1
             self.x = WIDTH
             redraw()
 
@@ -484,17 +487,18 @@ def on_key_down(key):
 def on_mouse_down(pos):
     global game_state
     global sound_enabled
-    if menu_elements[2].collidepoint(pos):
-        game_state = "playing"
-    elif menu_elements[3].collidepoint(pos):
-        if sound_enabled:
-            sound_enabled = False
-            music.stop()
-        else:
-            sound_enabled = True
-            music.play("time_for_adventure")
-    elif menu_elements[4].collidepoint(pos):
-        pgzrun.stop()
+    if game_state == "paused":
+        if menu_elements[2].collidepoint(pos):
+            game_state = "playing"
+        elif menu_elements[3].collidepoint(pos):
+            if sound_enabled:
+                sound_enabled = False
+                music.stop()
+            else:
+                sound_enabled = True
+                music.play("time_for_adventure")
+        elif menu_elements[4].collidepoint(pos):
+            quit()
 
 
 def handleInput(player):
@@ -513,8 +517,8 @@ for f, floor in enumerate(floor_list):
     obstacle_blocks[f] = []
     rows = floor.strip().split('\n')
     for r, row in enumerate(rows):
-        current_floor = row.split(',')
-        for c, n in enumerate(current_floor):
+        curr_f = row.split(',')
+        for c, n in enumerate(curr_f):
             if n == "0":
                 Dirt((c * block_size, r * block_size), f)
             if n == "1":
@@ -534,23 +538,21 @@ player = Player(slimeIdleFrames[0][0], (400, 100))
 menu_elements.append(Actor("main_menu_bg"))
 menu_elements.append(Actor("title", (WIDTH / 2, 140)))
 sound_ui_display = Actor("ui_sound", (WIDTH - 62, 62))
-print(sound_ui_display.pos)
 y_position = 320
 for btn_image in main_menu_btns:
     button = Menu_btn(btn_image, (500, y_position))
     y_position += 120
 
 # UPDATE & DRAW -------------------------------------------------------------------------------------------------
-drawing_list = [decorations_list, enemies_list[current_level], obstacle_blocks[current_level], collectibles_list]
+drawing_list = [decorations_list, enemies_list[current_floor], obstacle_blocks[current_floor], collectibles_list]
 def redraw():
     global drawing_list
     global decorations_list
     global collectibles_list
     for dec in range(1, random.randint(10, 20), 1):
         Decoration((random.randint(0, WIDTH), (HEIGHT - 96)))
-    drawing_list = [decorations_list, enemies_list[current_level], obstacle_blocks[current_level], collectibles_list]
+    drawing_list = [decorations_list, enemies_list[current_floor], obstacle_blocks[current_floor], collectibles_list]
     decorations_list = []
-    collectibles_list = []
 
 redraw()
 
@@ -591,7 +593,7 @@ def update():
     if game_state == "playing":
         player.updateSelf()
         handleInput(player)
-        for en in enemies_list[current_level]:
+        for en in enemies_list[current_floor]:
             en.update_self()
 
         for co in collectibles_list:
