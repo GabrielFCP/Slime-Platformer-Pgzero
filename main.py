@@ -572,7 +572,7 @@ def redraw():
     global collectibles_list
     for dec in range(1, random.randint(10, 20), 1):
         Foliage((random.randint(0, WIDTH), (HEIGHT - 96)))
-        Cloud(((random.randint(0, WIDTH), random.randint(70, HEIGHT / 2))))
+        Cloud(((random.randint(0, WIDTH), random.randint(70, int(HEIGHT / 2)))))
     drawing_list = [decorations_list, enemies_list[current_floor], obstacle_blocks[current_floor], collectibles_list]
 
 
